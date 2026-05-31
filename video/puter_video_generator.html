@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<script src="https://js.puter.com/v2/"></script>
+
+<style>
+
+body{
+    background:#0f172a;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+    padding:30px;
+}
+
+video{
+    width:85%;
+    border-radius:20px;
+    margin-top:20px;
+}
+
+#status{
+    font-size:22px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>MARVIS Video Generator</h1>
+
+<div id="status">
+    Initializing...
+</div>
+
+<script>
+
+async function generateVideo() {
+
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    const prompt =
+        params.get("prompt");
+
+    const status =
+        document.getElementById(
+            "status"
+        );
+
+    try {
+
+        status.innerHTML =
+            "Generating video...";
+
+        const start =
+            Date.now();
+
+        const timer =
+            setInterval(() => {
+
+                const seconds =
+                    (
+                        (
+                            Date.now()
+                            - start
+                        ) / 1000
+                    ).toFixed(1);
+
+                status.innerHTML =
+                    `Generating video...
+                    ${seconds}s`;
+
+            }, 100);
+
+        const video =
+            await puter.ai.txt2vid(
+                prompt,
+                {
+                    model:
+                    "google/veo-3.1-fast"
+                }
+            );
+
+        clearInterval(timer);
+
+        status.innerHTML =
+            "Video generated";
+
+        document.body.appendChild(
+            video
+        );
+
+        video.controls = true;
+
+        video.addEventListener(
+            "loadeddata",
+            () => {
+                video.play()
+                .catch(() => {});
+            }
+        );
+
+    } catch(error) {
+
+        console.error(error);
+
+        status.innerHTML =
+            "Failed to generate video";
+    }
+}
+
+generateVideo();
+
+</script>
+
+</body>
+
+</html>

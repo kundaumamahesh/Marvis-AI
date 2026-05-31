@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Puter Veo Test</title>
+    <script src="https://js.puter.com/v2/"></script>
+</head>
+<body>
+
+<h1>Testing Veo 3.1</h1>
+
+<div id="status">
+Starting...
+</div>
+
+<script>
+
+document.getElementById("status").innerText =
+    "Attempting video generation...";
+
+puter.ai.txt2vid(
+    "A dragon flying through fire",
+    {
+        model: "google/veo-3.1"
+    }
+)
+.then(video => {
+
+    document.getElementById("status").innerText =
+        "Success";
+
+    document.body.appendChild(video);
+
+})
+.catch(error => {
+
+    console.error(error);
+
+    document.getElementById("status").innerText =
+        "ERROR: " + JSON.stringify(error);
+
+});
+
+</script>
+
+</body>
+</html>

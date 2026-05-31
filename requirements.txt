@@ -1,0 +1,41 @@
+# ── UI ───────────────────────────────────────────────────────────────────────
+PyQt6
+PyQt6-WebEngine
+
+# ── Networking / HTTP ────────────────────────────────────────────────────────
+httpx
+requests
+
+# ── Environment ──────────────────────────────────────────────────────────────
+python-dotenv
+
+# ── Office file generation ───────────────────────────────────────────────────
+python-docx
+openpyxl
+python-pptx
+
+# ── Media / image processing ─────────────────────────────────────────────────
+pillow
+matplotlib
+
+# ── Data processing ───────────────────────────────────────────────────────────
+pandas
+numpy
+
+# ── Markdown rendering ────────────────────────────────────────────────────────
+markdown
+
+# ── Vector memory / semantic search ──────────────────────────────────────────
+faiss-cpu
+sentence-transformers
+
+# ── Voice / speech ────────────────────────────────────────────────────────────
+pyttsx3
+SpeechRecognition
+pyaudio
+
+# ── Async Qt integration ──────────────────────────────────────────────────────
+qasync
+
+# ── Web automation (AI scraper) ───────────────────────────────────────────────
+playwright
