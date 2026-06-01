@@ -98,7 +98,9 @@ class Orchestrator:
             # 1. Isolate the optimal search string keywords from the conversational prompt
             search_query = await self.llm.generate(
                 "Extract ONLY the optimal search engine search keywords from the user prompt. Do not output punctuation or markdown tags.",
-                prompt
+                prompt,
+                use_history=False,
+                save_to_memory=False
             )
             search_query = search_query.strip().replace('"', '')
             print(f"[ORCHESTRATOR DEBUG] Cleaned Search Query Sent to Engine: '{search_query}'")
@@ -219,7 +221,7 @@ class Orchestrator:
     async def generate_ppt(self, prompt, features=None):
         try:
             os.makedirs("outputs/ppt", exist_ok=True)
-            ai_content = await self.llm.generate(PPT_PROMPT, prompt)
+            ai_content = await self.llm.generate(PPT_PROMPT, prompt, use_history=False, save_to_memory=False)
 
             output_path = os.path.join(
                 "outputs/ppt",
@@ -246,7 +248,7 @@ class Orchestrator:
     async def generate_word(self, prompt):
         try:
             os.makedirs("outputs/word", exist_ok=True)
-            ai_content = await self.llm.generate(WORD_PROMPT, prompt)
+            ai_content = await self.llm.generate(WORD_PROMPT, prompt, use_history=False, save_to_memory=False)
 
             output_path = os.path.join(
                 "outputs/word",
@@ -274,7 +276,9 @@ class Orchestrator:
             os.makedirs("outputs/excel", exist_ok=True)
             csv_data = await self.llm.generate(
                 "Return ONLY CSV format for structured Excel data.",
-                prompt
+                prompt,
+                use_history=False,
+                save_to_memory=False
             )
 
             output_path = os.path.join(
@@ -349,23 +353,20 @@ class Orchestrator:
         clean_prompt = prompt.lower()
 
         # ======================================================================
-        # 🚀 INTERNAL LAYER INTERCEPT: UNIVERSAL FULL-STACK DEVELOPER PARSER (FIXED)
+        # 🚀 FIRST-CLASS NATIVE DEVELOPER TASK HANDLER (AI ROUTED)
         # ======================================================================
-        # Explicitly matching target parameters AND extended code tracking phrases
-        developer_keywords = [
-            "code", "program", "build a website", "write a script", 
-            "fullstack", "backend", "frontend", "where is the code", "show me the code"
-        ]
-        
-        if task == "code_generation" or any(keyword in clean_prompt for keyword in developer_keywords):
+        if task == "developer":
             if ui_stream_callback:
-                ui_stream_callback("<i>🛠️ Initializing MARVIS Internal Core Full-Stack Developer Engine...</i><br><br>")
+                ui_stream_callback("<i>🛠️ Initializing MARVIS Core Multi-Language Full-Stack Developer Engine...</i><br><br>")
             
             master_developer_instruction = (
-                "You are MARVIS, an elite Universal Full-Stack Software Architect and Principal Engineer fluent in all modern programming languages. "
-                "Provide comprehensive, production-grade, enterprise-ready software solutions. Use strict type hinting, modern design patterns, "
-                "proper security sanitization against SQL injection/XSS, and robust error handling. Output a clean ASCII project directory tree structure "
-                "at the very beginning, and write complete, functional files. Do not use placeholder comments or shortcut text like '// implement later'.\n\n"
+                "You are MARVIS, an elite Universal Multi-Language Full-Stack Software Architect and Principal Engineer. "
+                "You are fluent in ALL modern programming languages (including but not limited to Python, JavaScript, TypeScript, Rust, Go, C++, C#, Java, Ruby, PHP, HTML/CSS, SQL). "
+                "Provide comprehensive, production-grade, enterprise-ready software engineering solutions. Use strict type hinting, modern design patterns, "
+                "proper security sanitization (e.g. against SQL injection, XSS, CSRF), and robust, elegant error handling. "
+                "Output a clean ASCII project directory tree structure at the very beginning of your response to represent the layout, "
+                "and write complete, functional, and fully-formed files. DO NOT use placeholder comments, shortcuts, or text like '// implement later'. "
+                "Always generate code with the utmost precision, readability, and modularity.\n\n"
                 f"Engineering Task Request: {prompt}"
             )
             
@@ -389,8 +390,6 @@ class Orchestrator:
             if self.voice:
                 self.voice.speak("System architecture code compilation task completed successfully.")
                 
-            # FIX: Explicit return statement added here to break the function execution 
-            # and prevent the thread falling through to background logs or JSON dictionaries.
             return {"type": "chat", "status": "success", "message": full_response}
 
         # 🚨 CRITICAL INTERCEPT PRIORITY 1: Chatbot Web App Scraper 
@@ -428,10 +427,6 @@ class Orchestrator:
                 
             return {"type": "chat", "status": "success", "message": scraped_response}
 
-        # ⚡ INTERCEPT PRIORITY 2: Explicit application launch controls
-        first_two_words = " ".join(clean_prompt.split()[:2])
-        if "open" in first_two_words or "launch" in first_two_words:
-            return await self.launch_application(prompt, router_result)
 
         # 🌐 INTERCEPT PRIORITY 3: Google/Chrome visual searches
         if "image" in clean_prompt and ("google" in clean_prompt or "chrome" in clean_prompt):

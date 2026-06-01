@@ -10,9 +10,12 @@ from PyQt6.QtWidgets import (
     QHBoxLayout
 )
 from PyQt6.QtCore import pyqtSlot, QMetaObject, Qt
+import subprocess
+from subprocess import CREATE_NEW_PROCESS_GROUP
 
 from core.router import Router
 from core.workers import Worker
+from core.diagnostics import DiagnosticWorker
 
 
 class ModernUI(QWidget):
@@ -91,6 +94,12 @@ class ModernUI(QWidget):
         self.history = QListWidget()
         sidebar_layout.addWidget(QLabel("Chats"))
         sidebar_layout.addWidget(self.history)
+        self.check_integration_btn = QPushButton("Check Integrations")
+        self.check_integration_btn.clicked.connect(self.run_integrations_check)
+        sidebar_layout.addWidget(self.check_integration_btn)
+        self.dev_server_btn = QPushButton("Start Dev Server")
+        self.dev_server_btn.clicked.connect(self.start_dev_server)
+        sidebar_layout.addWidget(self.dev_server_btn)
 
         # Main area
         content_layout = QVBoxLayout()
@@ -216,23 +225,47 @@ class ModernUI(QWidget):
     def run_pipeline(self, prompt):
         # Reset token state tracker for every brand new request track loop
         self.is_first_token = True
-        
+
         # Pass function references and raw parameters to decouple cross-thread setup loops
         self.worker = Worker(self.handle_request, prompt)
-        
+
         # Connect both our completion tracker and the newly engineered real-time token signal
         self.worker.token_streamed.connect(self.append_stream_token)
         self.worker.finished.connect(self.completed)
         self.worker.start()
 
+    @pyqtSlot()
+    def run_integrations_check(self):
+        self.status_label.setText("System Status: Running integration checks...")
+        self.diagnostic_worker = DiagnosticWorker()
+        self.diagnostic_worker.progress.connect(self.handle_integration_progress)
+        self.diagnostic_worker.finished.connect(self.handle_integration_finished)
+        self.diagnostic_worker.start()
+
+    @pyqtSlot(str, str, str)
+    def handle_integration_progress(self, name, status, details):
+        self.chat.append(f"<b>{name}:</b> {status} - {details}")
+
+    @pyqtSlot(dict)
+    def handle_integration_finished(self, results):
+        self.chat.append("<b>Integration Check Completed</b>")
+        for name, info in results.items():
+            self.chat.append(f"{name}: {info['status']} - {info['details']}")
+        self.status_label.setText("System Status: Ready")
+
+    @pyqtSlot()
+    def start_dev_server(self):
+        """Launch a simple HTTP server serving the UI folder."""
+        self.status_label.setText("System Status: Starting dev server on http://localhost:8000")
+        server_dir = os.path.abspath(os.path.join(os.getcwd(), "ui"))
+        subprocess.Popen(
+            ["python", "-m", "http.server", "8000"],
+            cwd=server_dir,
+            creationflags=CREATE_NEW_PROCESS_GROUP,
+        )
+        self.chat.append("<i>Dev server started at http://localhost:8000</i>")
     async def handle_request(self, prompt, ui_stream_callback=None):
-        # Fast local pre-route mapping evaluation check
-        first_words = prompt.lower().split()[:2]
-        if "open" in first_words or "launch" in first_words:
-            result = {"task": "open_app"}
-        else:
-            result = await Router.detect(prompt)
-            
+        result = await Router.detect(prompt)
         return await self.orchestrator.process_request(result, prompt, ui_stream_callback)
 
     def clear_thinking_placeholder(self):

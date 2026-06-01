@@ -55,12 +55,12 @@ class LLMClient:
     async def generate(
         self,
         system_prompt,
-        user_prompt
+        user_prompt,
+        use_history=True,
+        save_to_memory=True
     ):
 
         try:
-
-            history = self.memory.get()
 
             messages = [
                 {
@@ -69,7 +69,9 @@ class LLMClient:
                 }
             ]
 
-            messages.extend(history)
+            if use_history:
+                history = self.memory.get()
+                messages.extend(history)
 
             messages.append({
                 "role": "user",
@@ -118,7 +120,7 @@ class LLMClient:
             # ==================================================
             # FIX FOR OWL-ALPHA RETURNING ROUTER JSON
             # ==================================================
-            if self.is_router_json(reply):
+            if save_to_memory and self.is_router_json(reply):
 
                 lower = user_prompt.lower().strip()
 
@@ -180,15 +182,16 @@ class LLMClient:
                     if retry_reply:
                         reply = retry_reply.strip()
 
-            self.memory.add(
-                "user",
-                user_prompt
-            )
+            if save_to_memory:
+                self.memory.add(
+                    "user",
+                    user_prompt
+                )
 
-            self.memory.add(
-                "assistant",
-                reply
-            )
+                self.memory.add(
+                    "assistant",
+                    reply
+                )
 
             return reply
 
@@ -206,14 +209,18 @@ class LLMClient:
     async def generate_stream(
         self,
         system_prompt,
-        user_prompt
+        user_prompt,
+        use_history=True,
+        save_to_memory=True
     ):
 
         try:
 
             response = await self.generate(
                 system_prompt,
-                user_prompt
+                user_prompt,
+                use_history=use_history,
+                save_to_memory=save_to_memory
             )
 
             words = response.split()
