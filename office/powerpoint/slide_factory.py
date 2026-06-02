@@ -1,4 +1,5 @@
-from pptx.util import Pt
+import os
+from pptx.util import Pt, Inches
 
 
 class SlideFactory:
@@ -45,12 +46,52 @@ class SlideFactory:
 
         tf = body.text_frame
 
-        bullets = slide_data["bullets"]
+        bullets = slide_data.get("bullets") or slide_data.get("bullets") or []
+        if not bullets and "content" in slide_data:
+            bullets = slide_data["content"]
+            if isinstance(bullets, str):
+                bullets = [bullets]
 
-        tf.text = bullets[0]
+        if bullets:
+            tf.text = bullets[0]
+            for bullet in bullets[1:]:
+                p = tf.add_paragraph()
+                p.text = bullet
+        else:
+            tf.text = ""
 
-        for bullet in bullets[1:]:
+    @staticmethod
+    def image_slide(
+        prs,
+        slide_data
+    ):
+        # Use Title Only layout (index 5)
+        slide_layout = prs.slide_layouts[5]
+        slide = prs.slides.add_slide(slide_layout)
 
-            p = tf.add_paragraph()
+        # Title
+        title = slide.shapes.title
+        title.text = slide_data.get("title", "Visual Highlight")
 
-            p.text = bullet
+        # Extract image path
+        image_path = slide_data.get("image_path") or slide_data.get("image") or slide_data.get("url")
+        
+        if image_path and os.path.exists(image_path):
+            left = Inches(1.5)
+            top = Inches(2.0)
+            width = Inches(7.0)
+            slide.shapes.add_picture(image_path, left, top, width=width)
+        else:
+            # Fallback if image not found on disk
+            left = Inches(1.5)
+            top = Inches(3.0)
+            width = Inches(7.0)
+            height = Inches(2.0)
+            txBox = slide.shapes.add_textbox(left, top, width, height)
+            tf = txBox.text_frame
+            tf.word_wrap = True
+            p = tf.paragraphs[0]
+            p.text = f"[Image Visual Placeholder: {image_path or 'No path specified'}]"
+            p.font.size = Pt(18)
+            p.font.italic = True
+

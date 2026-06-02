@@ -17,8 +17,10 @@ Starting...
 document.getElementById("status").innerText =
     "Attempting video generation...";
 
+const prompt = localStorage.getItem('marvis_prompt') || "A dragon flying through fire";
+
 puter.ai.txt2vid(
-    "A dragon flying through fire",
+    prompt,
     {
         model: "google/veo-3.1"
     }

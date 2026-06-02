@@ -143,23 +143,14 @@ class PPTGenerator:
 
                 # FALLBACK
                 else:
-
+                    content_val = slide_data.get("content") or slide_data.get("bullets") or [str(slide_data)]
+                    if isinstance(content_val, str):
+                        content_val = [content_val]
                     SlideFactory.bullet_slide(
                         prs,
                         {
-                            "title":
-                            slide_data.get(
-                                "title",
-                                "Slide"
-                            ),
-
-                            "content":
-                            slide_data.get(
-                                "content",
-                                [
-                                    str(slide_data)
-                                ]
-                            )
+                            "title": slide_data.get("title", "Slide"),
+                            "bullets": content_val
                         }
                     )
 

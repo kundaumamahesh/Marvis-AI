@@ -30,17 +30,21 @@ class VectorMemory:
         self.memories.append(text)
 
     def search(self, query):
+        if not self.memories:
+            return []
 
         embedding = self.model.encode(
             [query]
         )
 
+        k = min(5, len(self.memories))
         distances, indices = self.index.search(
             np.array(embedding).astype("float32"),
-            5
+            k
         )
 
-        return [
-            self.memories[i]
-            for i in indices[0]
-        ]
+        results = []
+        for i in indices[0]:
+            if 0 <= i < len(self.memories):
+                results.append(self.memories[i])
+        return results

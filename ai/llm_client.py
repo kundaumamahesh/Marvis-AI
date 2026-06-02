@@ -3,6 +3,7 @@ import requests
 import asyncio
 import re
 import os
+import threading
 
 from memory.memory_manager import MemoryManager
 
@@ -22,6 +23,20 @@ class LLMClient:
         )
 
         self.memory = MemoryManager()
+        self.vector_memory = None
+        self.memory_active = False
+
+        # Asynchronously load Vector Memory in the background so app starts instantly
+        threading.Thread(target=self._init_vector_memory, daemon=True).start()
+
+    def _init_vector_memory(self):
+        try:
+            from memory.vector_memory import VectorMemory
+            self.vector_memory = VectorMemory()
+            self.memory_active = True
+            print("[System] Semantic Vector Memory initialized successfully.")
+        except Exception as e:
+            print(f"[System INFO] Semantic Vector Memory inactive: {e}")
 
     # ----------------------------------
     # ROUTER JSON DETECTION
@@ -70,6 +85,18 @@ class LLMClient:
             ]
 
             if use_history:
+                # ── SEMANTIC VECTOR RAG ────────────────────────────────────
+                if self.memory_active and self.vector_memory:
+                    try:
+                        past_memories = self.vector_memory.search(user_prompt)
+                        if past_memories:
+                            context_str = "\n".join([f"- {m}" for m in past_memories if m.strip()])
+                            if context_str:
+                                system_prompt += f"\n\n[RELEVANT PAST CONTEXTS]\n{context_str}"
+                                messages[0]["content"] = system_prompt
+                    except Exception:
+                        pass
+
                 history = self.memory.get()
                 messages.extend(history)
 
@@ -193,6 +220,12 @@ class LLMClient:
                     reply
                 )
 
+                if self.memory_active and self.vector_memory:
+                    try:
+                        self.vector_memory.add_memory(f"User: {user_prompt} | Assistant: {reply}")
+                    except Exception:
+                        pass
+
             return reply
 
         except Exception as e:
@@ -215,27 +248,88 @@ class LLMClient:
     ):
 
         try:
+            messages = [
+                {
+                    "role": "system",
+                    "content": system_prompt
+                }
+            ]
 
-            response = await self.generate(
-                system_prompt,
-                user_prompt,
-                use_history=use_history,
-                save_to_memory=save_to_memory
-            )
+            if use_history:
+                # ── SEMANTIC VECTOR RAG ────────────────────────────────────
+                if self.memory_active and self.vector_memory:
+                    try:
+                        past_memories = self.vector_memory.search(user_prompt)
+                        if past_memories:
+                            context_str = "\n".join([f"- {m}" for m in past_memories if m.strip()])
+                            if context_str:
+                                system_prompt += f"\n\n[RELEVANT PAST CONTEXTS]\n{context_str}"
+                                messages[0]["content"] = system_prompt
+                    except Exception:
+                        pass
 
-            words = response.split()
+                history = self.memory.get()
+                messages.extend(history)
 
-            for word in words:
+            messages.append({
+                "role": "user",
+                "content": user_prompt
+            })
 
-                yield word + " "
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": 0.7,
+                "stream": True
+            }
 
-                await asyncio.sleep(
-                    0.02
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+
+            def perform_request():
+                return requests.post(
+                    self.url,
+                    json=payload,
+                    headers=headers,
+                    timeout=120,
+                    stream=True
                 )
 
-        except Exception as e:
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, perform_request)
+            response.raise_for_status()
 
-            yield (
-                f"Streaming Error: "
-                f"{str(e)}"
-            )
+            full_reply = ""
+            for line in response.iter_lines():
+                if line:
+                    decoded_line = line.decode('utf-8').strip()
+                    if decoded_line.startswith("data: "):
+                        data_str = decoded_line[6:]
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk_data = json.loads(data_str)
+                            token = chunk_data.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                            if token:
+                                full_reply += token
+                                yield token
+                        except Exception:
+                            pass
+                await asyncio.sleep(0.001)
+
+            if save_to_memory and full_reply:
+                # Deduplicate or clean greeting intercepts in streaming if necessary
+                self.memory.add("user", user_prompt)
+                self.memory.add("assistant", full_reply.strip())
+
+                if self.memory_active and self.vector_memory:
+                    try:
+                        self.vector_memory.add_memory(f"User: {user_prompt} | Assistant: {full_reply.strip()}")
+                    except Exception:
+                        pass
+
+        except Exception as e:
+            print("[LLM STREAM ERROR]", str(e))
+            yield f"Streaming Error: {str(e)}"

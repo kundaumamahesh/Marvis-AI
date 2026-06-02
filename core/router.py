@@ -30,11 +30,46 @@ class Router:
             "features": {}
         }
 
+    # ── Fast keyword pre-check (fires before the LLM round-trip) ────────────
+    _WEB_SEARCH_KEYWORDS = [
+        # Weather
+        "weather", "temperature", "forecast", "humidity", "rain today",
+        # News & current events
+        "news", "latest", "today", "current", "live", "right now", "update",
+        "breaking", "recently", "just happened",
+        # Finance
+        "stock", "price of", "bitcoin", "crypto", "market", "nasdaq",
+        "nifty", "sensex", "usd", "inr", "exchange rate",
+        # Sports
+        "score", "match result", "ipl", "cricket", "football", "nba",
+        # General live lookups
+        "who is the president", "who won", "population of",
+        "how many covid", "earthquake", "hurricane",
+    ]
+
+    @staticmethod
+    def _quick_web_check(text: str):
+        """Returns a web_search result dict if the query is obviously live-data, else None."""
+        lower = text.lower()
+        for kw in Router._WEB_SEARCH_KEYWORDS:
+            if kw in lower:
+                return {
+                    "task": "web_search",
+                    "confidence": 0.92,
+                    "features": {"query": text.strip()}
+                }
+        return None
+
     @staticmethod
     async def detect(text: str):
         text = text.strip()
         if not text:
             return Router._default_response()
+
+        # Fast-path: skip the LLM call for obvious live-data queries
+        quick = Router._quick_web_check(text)
+        if quick:
+            return quick
 
         routing_prompt = """You are the routing brain of MARVIS AI, a state-of-the-art intelligent routing agent.
 
@@ -60,9 +95,14 @@ Your job is to analyze the User Request and classify it into EXACTLY ONE of the 
    - You MUST extract the volume percentage as an integer (0-100) and place it in the "features" object under the "level" key. E.g. {"level": 80}
 
 5. "web_search":
-   - Intent: Queries requesting real-time weather information, current temperature, latest news, up-to-date events, live scores, stock prices, or anything requiring live internet context.
-   - Examples: "what is the weather today", "Mangalagiri weather current temperature", "latest news on AI", "bitcoin price".
-   - You MUST extract or clean the search query and place it in the "features" object under the "query" key. E.g. {"query": "weather Mangalagiri"}
+   - Intent: ANY query that requires live, real-time, or up-to-date information from the internet:
+     weather, current temperature, latest news, live sports scores, stock/crypto prices,
+     recent events, current office-holders, product prices, current exchange rates, today's
+     headlines, or anything where the answer could have changed in the last 24 hours.
+   - Examples: "what is the weather today", "latest news on AI", "bitcoin price", "who won IPL 2025",
+     "current USD to INR rate", "earthquake news", "Mangalagiri weather".
+   - You MUST extract or clean the search query and place it in the "features" object under the "query" key.
+     E.g. {"query": "weather Mangalagiri"}
 
 6. "powerpoint":
    - Intent: Specifically creating, generating, or designing a PowerPoint presentation, slide deck, or ppt file.
@@ -77,7 +117,7 @@ Your job is to analyze the User Request and classify it into EXACTLY ONE of the 
    - Examples: "create an excel sheet of monthly budget", "generate a table of grades".
 
 9. "image":
-   - Intent: Generating or drawing an image, artwork, illustration, painting, logo, or picture (DALL-E / visual assets).
+   - Intent: Generating or drawing an image, artwork, illustration, painting, logo, or picture.
    - Examples: "generate an image of a red cat", "draw a futuristic city picture".
 
 10. "video":
@@ -85,7 +125,8 @@ Your job is to analyze the User Request and classify it into EXACTLY ONE of the 
     - Examples: "create a video about space travel", "generate a short animation clip".
 
 11. "chat":
-    - Intent: General conversation, chit-chat, greetings, questions that don't fit any other category, general explanations, math, system questions, or basic advice.
+    - Intent: General conversation, chit-chat, greetings, questions that don't fit any other category,
+      general explanations, math, system questions, or basic advice.
     - Examples: "hello", "how are you", "explain quantum computing", "solve 2+2".
 
 CRITICAL INSTRUCTIONS:

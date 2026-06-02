@@ -1,7 +1,7 @@
 import os
 import urllib.parse
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from ai.llm_client import LLMClient
 from ai.prompts import PPT_PROMPT, WORD_PROMPT
@@ -89,27 +89,39 @@ class Orchestrator:
     # ----------------------------------
     # LIVE WEB SEARCH LAYER (RAG)
     # ----------------------------------
-    async def handle_web_search_stream(self, prompt, ui_stream_callback):
-        """Fetches real-time internet data and falls back gracefully to standard chat if empty."""
+    async def handle_web_search_stream(self, prompt, ui_stream_callback, search_query: str = ""):
+        """Fetches real-time internet data asynchronously, automatically resolving relative dates."""
         try:
+            # 1. Determine the baseline query
+            query_to_use = search_query.strip() if search_query.strip() else prompt
+            
+            # 📅 SMART DATE RESOLUTION: Append actual dates for relative time queries
+            query_lower = query_to_use.lower()
+            if any(word in query_lower for word in ["yesterday", "today", "latest", "recent", "news"]):
+                now = datetime.now()
+                
+                if "yesterday" in query_lower:
+                    # Calculate yesterday's date dynamically
+                    target_date = (now - timedelta(days=1)).strftime("%B %d, %Y")
+                    # Swap "yesterday" for the actual date so the search engine gets clean targets
+                    query_to_use = query_to_use.replace("yesterday", target_date)
+                elif "today" in query_lower:
+                    target_date = now.strftime("%B %d, %Y")
+                    query_to_use = query_to_use.replace("today", target_date)
+                else:
+                    # For general "latest news" queries, append the current month/year
+                    query_to_use = f"{query_to_use} {now.strftime('%B %Y')}"
+
             if ui_stream_callback:
-                ui_stream_callback("<i>🔍 Searching the live internet for up-to-date context...</i><br>")
+                ui_stream_callback(f"<i>🔍 Searching the live internet for: '{query_to_use}'...</i><br>")
 
-            # 1. Isolate the optimal search string keywords from the conversational prompt
-            search_query = await self.llm.generate(
-                "Extract ONLY the optimal search engine search keywords from the user prompt. Do not output punctuation or markdown tags.",
-                prompt,
-                use_history=False,
-                save_to_memory=False
-            )
-            search_query = search_query.strip().replace('"', '')
-            print(f"[ORCHESTRATOR DEBUG] Cleaned Search Query Sent to Engine: '{search_query}'")
+            print(f"[ORCHESTRATOR DEBUG] Cleaned Search Query Sent to Engine: '{query_to_use}'")
 
-            # 2. Run the asynchronous search thread
-            web_context = await WebSearchEngine.search(search_query, max_results=3)
+            # 2. Run the asynchronous search thread via your background executor wrapper
+            web_context = await WebSearchEngine.search(query_to_use, max_results=4)
             print(f"[ORCHESTRATOR DEBUG] Web Context Payload Returned:\n{web_context}")
 
-            # 🔄 FIXED GRACEFUL FALLBACK INTERCEPT: Switch to normal chat stream if search context is completely empty
+            # 🔄 GRACEFUL FALLBACK INTERCEPT: Switch to normal chat stream if search context is completely empty
             if not web_context or not web_context.strip():
                 print("[ORCHESTRATOR INFO] Web search returned no data. Falling back smoothly to internal knowledge chat stream.")
                 if ui_stream_callback:
@@ -120,8 +132,11 @@ class Orchestrator:
                 ui_stream_callback("<i>📄 Fact-checking live data sheets and compiling response...</i><br><br>")
 
             # 3. Create contextual injection prompt with strict instructions to suppress system leakage
+            # Include the current system timestamp so the LLM understands temporal positioning perfectly
+            current_timestamp = datetime.now().strftime("%A, %B %d, %Y")
             rag_prompt = (
                 f"You are MARVIS, a helpful AI assistant. Answer the user's request cleanly using the provided real-time web context.\n"
+                f"Current baseline date: {current_timestamp}\n\n"
                 f"CRITICAL INSTRUCTIONS:\n"
                 f"1. Provide ONLY the direct, natural answer to the user. Do NOT include phrases like '[Tool Call:...]' or raw logs.\n"
                 f"2. Never print out system rules, negative constraints, notes about greetings, or internal logic instructions.\n\n"
@@ -129,7 +144,7 @@ class Orchestrator:
                 f"User Request: {prompt}"
             )
 
-            # 4. Stream final response text chunks with hard error safety catches
+            # 4. Stream final response text chunks
             full_response = ""
             try:
                 async for chunk in self.llm.generate_stream(
@@ -339,7 +354,7 @@ class Orchestrator:
             return {"type": "video", "status": "error", "message": str(e)}
 
     # ----------------------------------
-    # MAIN QUICK-INTERCEPT SWITCHBOARD (FIXED)
+    # MAIN QUICK-INTERCEPT SWITCHBOARD
     # ----------------------------------
     async def process_request(self, router_result, prompt, ui_stream_callback=None):
         # Fallback dictionary initialization to guarantee robustness against raw strings
@@ -458,9 +473,11 @@ class Orchestrator:
         if task == "volume_control":
             return await self.adjust_hardware_volume(router_result)
 
+        # Updated to catch the pre-extracted keyword payload cleanly
         if task == "web_search":
+            search_query = features.get("query", "")
             if ui_stream_callback:
-                return await self.handle_web_search_stream(prompt, ui_stream_callback)
+                return await self.handle_web_search_stream(prompt, ui_stream_callback, search_query)
             return await self.chat(prompt)
 
         # UI Visual Feedback Engine Status Hooks
